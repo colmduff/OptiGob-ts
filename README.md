@@ -94,22 +94,6 @@ By default, `cattle_systems` uses a fixed heuristic to split each waypoint's emi
 
 `ratio_type` is `"dairy_per_beef"` or `"beef_per_dairy"`, matching `optigob`'s own convention. Requires the `optimise`/`full` extra (`highspy`) installed. Run `tests/example.py` to see a side-by-side comparison of the heuristic vs. optimiser split on the same scenario. See `tests/test_livestock_optimisation.py` for further worked examples, and `claude-docs/livestock-optimisation-gap.md` in the parent monorepo for the design rationale.
 
-## Known limitations
-
-- **Near-term (2020–2025) scaler calibration is inert.** The `scalers` table's
-  per-year factors are not applied (a dtype check freezes them after the first
-  year); the mechanism currently does nothing. The obvious one-line "fix" is a
-  trap — it double-applies the scaler and sends Dairy CO₂e to ~2,000,000 kt/yr.
-  A correct fix needs the intended calibration semantics defined and reworked;
-  deferred and best done alongside the baseline cattle N₂O review. See
-  `claude-docs/bugs.md` item #3.
-- **Baseline cattle N₂O** is stored at 1 decimal place in the bundled database,
-  which overstates baseline cattle CO₂e by ~16%; under review.
-- `utils.add_two_lists` silently returns `None` on a list-length mismatch rather than raising.
-- Forestry, HWP, substitution, BECCS and willow do not respond to the AR (GWP)
-  selection — their database tables store only pre-aggregated figures with no
-  gas-level breakdown, so AR-dependence would have to be resolved upstream.
-
 ## License
 
 MIT.
