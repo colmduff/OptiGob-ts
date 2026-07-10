@@ -1,0 +1,34 @@
+{
+    "baseline_year": 2020,
+    "target_year": 2050,
+    "organic_soils": [
+        {
+            "name": "Organic soil under grass",
+            "drainage_status": ["Drained", "Rewetted"],
+            "waypoints": [
+                {"year": 2030, "rewetting_ratio": 0.1},
+                {"year": 2050, "rewetting_ratio": 0.4}
+            ]
+        },
+        {
+            "name": "Near natural wetlands",
+            "drainage_status": ["Natural"]
+        },
+        {
+            "name": "Industrial peat",
+            "drainage_status": ["Drained", "Rewetted"],
+            "waypoints": [
+                {"year": 2030, "rewetting_ratio": 0.0},
+                {"year": 2050, "rewetting_ratio": 0.3}
+            ]
+        },
+        {
+            "name": "Domestic peat",
+            "drainage_status": ["Drained", "Rewetted"],
+            "waypoints": [
+                {"year": 2030, "rewetting_ratio": 0.0},
+                {"year": 2050, "rewetting_ratio": 0.3}
+            ]
+        }
+    ]
+}

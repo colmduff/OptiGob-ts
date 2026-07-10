@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "optigob-ts"
+version = "0.1.0"
+description = "A time-series land use change and environmental assessment tool for waypoint-based scenario pathways (core engine extracted from OptiGOBTimeSeries)"
+authors = ["Colm Duffy"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "optigob_ts", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pandas = "^2.2.3"
+pyomo = "^6.8.0"
+matplotlib = { version = "^3.10.0", optional = true }
+openpyxl = { version = "^3.1.5", optional = true }
+highspy = { version = "^1.13.1", optional = true }
+
+[tool.poetry.extras]
+viz = ["matplotlib"]
+export = ["openpyxl"]
+optimise = ["highspy"]
+full = ["matplotlib", "openpyxl", "highspy"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.0"
+optigob = "^0.1.5"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

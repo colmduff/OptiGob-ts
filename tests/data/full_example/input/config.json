@@ -1,0 +1,221 @@
+{
+  "baseline_year": 2020,
+  "target_year": 2100,
+  "split_gas": false,
+  "split_gas_frac": 0.7,
+  "forestry": [
+    {
+      "name": "existing_forest",
+      "harvest": "high",
+      "ccs": true
+    },
+    {
+      "name": "afforestation",
+      "afforestation_rate": 5.0,
+      "broadleaf_frac": 0.5,
+      "organic_soil": 0.15,
+      "harvest": "high",
+      "ccs": true
+    }
+  ],
+  "organic_soils": [
+    {
+      "name": "Organic soil under grass",
+      "drainage_status": [
+        "Drained",
+        "Rewetted"
+      ],
+      "waypoints": [
+        {
+          "year": 2030,
+          "rewetting_ratio": 0.0
+        },
+        {
+          "year": 2040,
+          "rewetting_ratio": 0.2
+        },
+        {
+          "year": 2050,
+          "rewetting_ratio": 0.4
+        }
+      ]
+    },
+    {
+      "name": "Near natural wetlands",
+      "drainage_status": [
+        "Natural"
+      ]
+    },
+    {
+      "name": "Industrial peat",
+      "drainage_status": [
+        "Drained",
+        "Rewetted"
+      ],
+      "waypoints": [
+        {
+          "year": 2030,
+          "rewetting_ratio": 0.0
+        },
+        {
+          "year": 2040,
+          "rewetting_ratio": 0.15
+        }
+      ]
+    },
+    {
+      "name": "Domestic peat",
+      "drainage_status": [
+        "Drained",
+        "Rewetted"
+      ],
+      "waypoints": [
+        {
+          "year": 2030,
+          "rewetting_ratio": 0.0
+        },
+        {
+          "year": 2040,
+          "rewetting_ratio": 0.15
+        }
+      ]
+    }
+  ],
+  "non_cattle_agriculture": [
+    {
+      "name": "Pigs",
+      "abatement": "2020 BL",
+      "productivity": "2020 Prod",
+      "waypoints": [
+        {
+          "year": 2030,
+          "abatement": "2020 BL",
+          "productivity": "2020 Prod",
+          "scaler": 1.0,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        },
+        {
+          "year": 2040,
+          "abatement": "MACC",
+          "productivity": "2020 Prod",
+          "scaler": 0.9,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        }
+      ]
+    },
+    {
+      "name": "Poultry",
+      "abatement": "2020 BL",
+      "productivity": "2020 Prod",
+      "waypoints": [
+        {
+          "year": 2030,
+          "abatement": "2020 BL",
+          "productivity": "2020 Prod",
+          "scaler": 1.0,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        },
+        {
+          "year": 2040,
+          "abatement": "MACC",
+          "productivity": "2020 Prod",
+          "scaler": 0.9,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        }
+      ]
+    },
+    {
+      "name": "Sheep",
+      "abatement": "2020 BL",
+      "productivity": "2020 Prod",
+      "waypoints": [
+        {
+          "year": 2030,
+          "abatement": "2020 BL",
+          "productivity": "2020 Prod",
+          "scaler": 1.0,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        },
+        {
+          "year": 2045,
+          "abatement": "2020 BL",
+          "productivity": "2020 Prod",
+          "scaler": 0.8,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        }
+      ]
+    },
+    {
+      "name": "Crops",
+      "abatement": "2020 BL",
+      "productivity": "2020 Prod",
+      "waypoints": [
+        {
+          "year": 2030,
+          "abatement": "2020 BL",
+          "productivity": "2020 Prod",
+          "scaler": 1.0,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        },
+        {
+          "year": 2040,
+          "abatement": "2020 BL",
+          "productivity": "2020 Prod",
+          "scaler": 0.9,
+          "scale_parameter": "co2e",
+          "scale_absolute_or_percentage": false
+        }
+      ]
+    }
+  ],
+  "cattle_systems": {
+    "abatement": "2020 BL",
+    "productivity": "2020 Prod",
+    "ratio_type": "dairy_per_beef",
+    "ratio_value": 2.0,
+    "waypoints": [
+      {
+        "year": 2030,
+        "abatement": "2020 BL",
+        "scaler": 1.0,
+        "scale_parameter": "co2e",
+        "scale_absolute_or_percentage": false,
+        "dairy_productivity": "2020 Prod",
+        "beef_productivity": "2020 Prod"
+      },
+      {
+        "year": 2040,
+        "abatement": "2020 BL",
+        "scaler": 0.8,
+        "scale_parameter": "co2e",
+        "scale_absolute_or_percentage": false,
+        "dairy_productivity": "Medium increase",
+        "beef_productivity": "Medium increase"
+      },
+      {
+        "year": 2050,
+        "abatement": "MACC",
+        "scaler": 0.5,
+        "scale_parameter": "co2e",
+        "scale_absolute_or_percentage": false,
+        "dairy_productivity": "Strong increase",
+        "beef_productivity": "Strong increase"
+      }
+    ]
+  },
+  "ad_emissions": {
+    "implementation_year": 2035,
+    "ccs": true,
+    "additional_biomethane_year": 2040,
+    "additional_grass_biomethane": 2000.0,
+    "willow_year": 2045,
+    "cdr_bioenergy": 5000.0
+  }
+}

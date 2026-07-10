@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.pytest_cache/
+*.log
+
+# local scratch/archive, never committed
+artifact/
+
+# database backups (kept in the monorepo's archive/, never shipped)
+*.bak
+*.db.bak

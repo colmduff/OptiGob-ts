@@ -1,0 +1,12 @@
+{
+    "baseline_year": 2020,
+    "target_year": 2050,
+    "ad_emissions": {
+        "implementation_year": 2030,
+        "ccs": true,
+        "additional_biomethane_year": 2035,
+        "additional_grass_biomethane": 2000.0,
+        "willow_year": 2040,
+        "cdr_bioenergy": 1500.0
+    }
+}
