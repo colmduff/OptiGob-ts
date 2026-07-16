@@ -10,6 +10,11 @@ from ..common.logger import get_logger
 
 logger = get_logger("cattle_agriculture")
 
+# The year a selected abatement/productivity reaches full effect, on a clock
+# independent of `target_year` and of every waypoint. 2050 matches the original
+# OptiGob's scaler tables, which run 2020-2050 and stop.
+DEFAULT_DEPLOYMENT_YEAR = 2050
+
 
 @dataclass()
 class CattleWayPoint(AgricultureWayPoint):
@@ -92,8 +97,72 @@ class CattleAgriculture(Field):
                 values = [x + y for (x, y) in zip(values, system.time_series[key])]
         return values
 
+    def _baseline_row(self, system, db_manager, gwp):
+        """The system's own `2020 BL`/`2020 Prod`-style reference row -- the
+        row its baseline time_series was loaded from. This is the *start* of
+        the deployment ramp (see `_deploy_frac`); the waypoint's row is the
+        end."""
+        kwargs = db_manager.get_agriculture_data(abatement=system.baseline_abatement,
+                                                 productivity=system.baseline_productivity,
+                                                 system=system.name,
+                                                 agriculture=TABLE_CATTLE)
+        return recompute_co2e(kwargs, gwp)
+
+    @staticmethod
+    def _deploy_frac(year, baseline_year, deployment_year):
+        """How far a selected abatement/productivity has been deployed by
+        `year`, on a clock that is deliberately independent of the waypoints.
+
+        This mirrors the original OptiGob's year-indexed scaler tables
+        (`animal_emission_scalers`, `animal_protein_scalers`), which have three
+        properties this reproduces: every scenario shares an identical
+        baseline-year value, the ramp between is linear, and the horizon is
+        fixed (2020-2050) rather than derived from user input. Anchoring the
+        ramp to the first waypoint instead would make "Frontier" mean a 2030
+        deployment for one user and 2050 for another -- see
+        claude-docs/abatement-deployment-ramp.md.
+        """
+        if deployment_year <= baseline_year:
+            return 1.0
+        return min(1.0, (year - baseline_year) / (deployment_year - baseline_year))
+
+    @staticmethod
+    def _interpolate_row(baseline_row, waypoint_row, frac):
+        """Blend two reference rows field-by-field. Non-numeric fields (the
+        `*_unit` strings) are taken from the waypoint row unchanged."""
+        row = {}
+        for key, value in waypoint_row.items():
+            base_value = baseline_row.get(key)
+            if isinstance(value, (int, float)) and isinstance(base_value, (int, float)):
+                row[key] = base_value + (value - base_value) * frac
+            else:
+                row[key] = value
+        return row
+
+    def _baseline_ratio(self, dairy_baseline_row, beef_baseline_row, ratio_type):
+        """The dairy:beef ratio the observed baseline year actually had,
+        expressed in the same units the LP's decision variables use (a
+        multiplier on each reference row).
+
+        Recovered from the data rather than hardcoded: each system's baseline
+        time_series value is its reference row times the `scalers` table's
+        baseline-year calibration, so dividing one by the other recovers that
+        calibration (151.19 for Dairy, 95.30 for Beef in the bundled DB ->
+        1.5865 dairy per beef). Ramping from this, rather than snapping to the
+        configured `ratio_value` in year 1, is what keeps 2021 continuous with
+        2020.
+        """
+        dairy_scaler = (self.systems[0].time_series[TOTAL_CATTLE_NUMBERS][0]
+                        / dairy_baseline_row[TOTAL_CATTLE_NUMBERS])
+        beef_scaler = (self.systems[1].time_series[TOTAL_CATTLE_NUMBERS][0]
+                       / beef_baseline_row[TOTAL_CATTLE_NUMBERS])
+        if ratio_type == "beef_per_dairy":
+            return beef_scaler / dairy_scaler
+        return dairy_scaler / beef_scaler
+
     def run_cattle_systems(self, baseline_year, target_year, db_manager, nca,
-                           forestry=None, ad_emissions=None, gwp=DEFAULT_GWP, split_gas=False):
+                           forestry=None, ad_emissions=None, gwp=DEFAULT_GWP, split_gas=False,
+                           deployment_year=DEFAULT_DEPLOYMENT_YEAR):
         # Tracks the (year, limit) anchor the *next* segment's per-year limit
         # interpolation starts from. Starts at the implicit baseline anchor
         # (scaler=1.0 at baseline_year); advances to each waypoint's own
@@ -105,6 +174,11 @@ class CattleAgriculture(Field):
         prev_anchor_year = baseline_year
         prev_anchor_limit = None
         prev_anchor_ch4_limit = None
+
+        # The start of the deployment ramp: the reference rows the baseline
+        # time_series were loaded from. Fetched once -- they never change.
+        dairy_baseline_row = self._baseline_row(self.systems[0], db_manager, gwp)
+        beef_baseline_row = self._baseline_row(self.systems[1], db_manager, gwp)
 
         for waypoint in self.systems[0].waypoints:
             assert isinstance(waypoint, CattleWayPoint)
@@ -162,25 +236,24 @@ class CattleAgriculture(Field):
                 else:
                     ch4_limit = ch4_baseline * waypoint.ch4_scaler
 
-            ratio_type = waypoint.ratio_type or self.ratio_type
+            ratio_type = waypoint.ratio_type or self.ratio_type or "dairy_per_beef"
             ratio_value = waypoint.ratio_value or self.ratio_value
 
-            if ratio_type is None or ratio_value is None:
-                raise ValueError(
-                    f"cattle_systems requires ratio_type/ratio_value (set at "
-                    f"the cattle_systems block level, or per-waypoint) -- "
-                    f"missing at waypoint year={waypoint.year}. The "
-                    f"heuristic (no-ratio) split has been removed: it had no "
-                    f"land-balance awareness at all, unlike this ratio-"
-                    f"constrained optimiser, which enforces a hard per-year "
-                    f"area_commitment constraint automatically. See "
-                    f"claude-docs/consistency-and-moo.md section 2/2a and "
-                    f"claude-docs/land-balance.md for why."
+            # The ratio the baseline year actually had. Also the default when
+            # no ratio_value is configured: a config that says nothing about
+            # herd composition should reproduce the observed baseline herd,
+            # not silently restructure it.
+            baseline_ratio = self._baseline_ratio(dairy_baseline_row, beef_baseline_row, ratio_type)
+            if ratio_value is None:
+                ratio_value = baseline_ratio
+                logger.info(
+                    "run_cattle_systems: no ratio_value configured -- defaulting to the "
+                    "baseline year's own ratio (%s=%.4f)", ratio_type, baseline_ratio,
                 )
 
-            # Ratio-constrained, budget-optimised split (mandatory -- see
-            # claude-docs/livestock-optimisation-gap.md), solved
-            # independently for EVERY year in this segment (not just at
+            # Ratio-constrained, budget-optimised split (the heuristic split
+            # was removed entirely -- see claude-docs/cattle-optimisation.md),
+            # solved independently for EVERY year in this segment (not just at
             # the waypoint) so that area_commitment -- computed from the
             # real, already-fully-run per-year trajectories of sheep/
             # afforestation/AD -- is a hard constraint every year, not just
@@ -214,8 +287,24 @@ class CattleAgriculture(Field):
                 frac = (year - segment_start) / (segment_end - segment_start)
                 year_limit = anchor_limit + (limit - anchor_limit) * frac
 
+                # Deployment runs on its own fixed clock, NOT on `frac` above.
+                # `frac` paces the emissions *envelope* (a target the user sets
+                # on waypoints); `deploy_frac` paces abatement/productivity/ratio
+                # (a scenario property). Conflating the two is what used to make
+                # the first waypoint's settings land in full in baseline_year+1.
+                deploy_frac = self._deploy_frac(year, baseline_year, deployment_year)
+                dairy_year_data = self._interpolate_row(dairy_baseline_row, dairy_waypoint_data, deploy_frac)
+                beef_year_data = self._interpolate_row(beef_baseline_row, beef_waypoint_data, deploy_frac)
+                year_ratio_value = baseline_ratio + (ratio_value - baseline_ratio) * deploy_frac
+
                 year_budget = year_limit - nca_values[idx]
                 if year_budget < 0:
+                    logger.warning(
+                        "run_cattle_systems: year=%s non-cattle agriculture alone (%.1f) exceeds the "
+                        "whole-agriculture %s envelope (%.1f) -- cattle budget clamped to 0, so the "
+                        "solved herd will be ~zero. The envelope cannot be met by reducing cattle.",
+                        year, nca_values[idx], effective_scale_parameter, year_limit,
+                    )
                     year_budget = 0
 
                 ch4_budget_this_year = None
@@ -223,6 +312,12 @@ class CattleAgriculture(Field):
                     ch4_year_limit = anchor_ch4_limit + (ch4_limit - anchor_ch4_limit) * frac
                     ch4_budget_this_year = ch4_year_limit - nca_ch4_values[idx]
                     if ch4_budget_this_year < 0:
+                        logger.warning(
+                            "run_cattle_systems: year=%s non-cattle agriculture's CH4 alone (%.1f) "
+                            "exceeds the whole-agriculture CH4 envelope (%.1f) -- cattle CH4 budget "
+                            "clamped to 0, so the solved herd will be ~zero.",
+                            year, nca_ch4_values[idx], ch4_year_limit,
+                        )
                         ch4_budget_this_year = 0
 
                 area_commitment = (self.systems[0].time_series[DAIRY_AREA][0]
@@ -242,11 +337,11 @@ class CattleAgriculture(Field):
                     year, year_budget, area_commitment,
                 )
                 result = LivestockOptimisation().optimise(
-                    dairy_waypoint_data=dairy_waypoint_data,
-                    beef_waypoint_data=beef_waypoint_data,
+                    dairy_waypoint_data=dairy_year_data,
+                    beef_waypoint_data=beef_year_data,
                     scale_parameter=effective_scale_parameter,
                     ratio_type=ratio_type,
-                    ratio_value=ratio_value,
+                    ratio_value=year_ratio_value,
                     emissions_budget=year_budget,
                     area_commitment=area_commitment,
                     ch4_budget=ch4_budget_this_year,
@@ -257,7 +352,7 @@ class CattleAgriculture(Field):
                 beef_scaler = result["beef_scaler"]
 
                 scaled_dairy_waypoint = {}
-                for key, value in dairy_waypoint_data.items():
+                for key, value in dairy_year_data.items():
                     if isinstance(value, int) or isinstance(value, float):
                         scaled_dairy_waypoint[key] = dairy_scaler * value
                     else:
@@ -267,7 +362,7 @@ class CattleAgriculture(Field):
                                                    target_year=year)
 
                 scaled_beef_waypoint = {}
-                for key, value in beef_waypoint_data.items():
+                for key, value in beef_year_data.items():
                     if isinstance(value, int) or isinstance(value, float):
                         scaled_beef_waypoint[key] = beef_scaler * value
                     else:

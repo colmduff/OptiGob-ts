@@ -36,6 +36,16 @@ class ForestrySystem(System):
         ch4 = [0] * time_span
         return co2, n2o, ch4
 
+    def get_gas(self, gas, time_span):
+        # Forestry has no gas-level breakdown in this package's DB at all: its
+        # whole climate effect is a single precomputed CO2e figure. Mirrors
+        # get_net_zero above, which reports that figure as CO2 and zero for the
+        # other two -- so CO2 is the CO2e series and CH4/N2O are structurally
+        # zero, not merely unknown.
+        if gas == CO2:
+            return self.name, self.time_series[CO2E][:time_span]
+        return self.name, [0] * time_span
+
 @dataclass
 class ExistingForest(ForestrySystem):
     def load_data(self, db_manager, gwp=None):

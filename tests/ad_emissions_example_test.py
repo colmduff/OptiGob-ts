@@ -21,7 +21,7 @@ literally what the config is for:
     (grass silage -> biomethane). It ramps in over a short, fixed-length
     window baked into the database (here: 2024-2030, ~6 years) that ENDS at
     implementation_year -- not a ramp starting from baseline_year (see
-    claude-docs/code-walkthrough-and-optimisation-entry-point.md section on
+    claude-docs/consistency-and-moo.md section on
     "willow" for the exact offset-shifting mechanism).
   - ccs=true: carbon capture applied to the AD system from implementation
     onward (BECCS -- bioenergy with carbon capture and storage).

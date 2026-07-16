@@ -99,7 +99,7 @@ def main():
 
     # The cattle dairy/beef split is the part of the model most worth
     # inspecting directly -- see claude-docs/consistency-and-moo.md and
-    # claude-docs/livestock-optimisation-gap.md. cattle_systems requires
+    # claude-docs/cattle-optimisation.md. cattle_systems requires
     # ratio_type/ratio_value now (the heuristic split was removed), so this
     # is always the ratio-constrained LP solve, never a heuristic.
     if optigob.get_field("cattle_systems") is not None:
@@ -176,7 +176,7 @@ def main():
 
     # The cattle dairy/beef split is the part of the model most worth
     # inspecting directly -- see claude-docs/consistency-and-moo.md and
-    # claude-docs/livestock-optimisation-gap.md. cattle_systems requires
+    # claude-docs/cattle-optimisation.md. cattle_systems requires
     # ratio_type/ratio_value now (the heuristic split was removed), so this
     # is always the ratio-constrained LP solve, never a heuristic.
     if optigob.get_field("cattle_systems") is not None:
@@ -221,7 +221,7 @@ def run_ratio_demo(base_config, logger):
     Same scenario as main(), but with a different ratio_value (5.0 instead
     of config.json's 2.0) on cattle_systems, to show how changing that one
     number reshapes the whole dairy/beef split -- see
-    claude-docs/livestock-optimisation-gap.md and claude-docs/consistency-and-moo.md.
+    claude-docs/cattle-optimisation.md and claude-docs/consistency-and-moo.md.
     """
     import copy
     config = copy.deepcopy(base_config)

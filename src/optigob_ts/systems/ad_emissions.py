@@ -38,6 +38,12 @@ class ADSystem(System):
         ch4 = add_two_lists(ch4, self.time_series["additional_" + CH4][:time_span])
         return co2, n2o, ch4
 
+    def get_gas(self, gas, time_span):
+        # AD carries a base and an "additional_" stream per gas; both count,
+        # exactly as get_net_zero above sums them.
+        return self.name, add_two_lists(self.time_series[gas][:time_span],
+                                        self.time_series["additional_" + gas][:time_span])
+
 class AnaerobicDigestion(Field):
 
     def __init__(self, data):

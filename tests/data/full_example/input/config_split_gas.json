@@ -1,6 +1,7 @@
 {
   "baseline_year": 2020,
   "target_year": 2100,
+  "deployment_year": 2050,
   "split_gas": true,
   "split_gas_frac": 0.7,
   "forestry": [

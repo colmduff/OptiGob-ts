@@ -3,7 +3,7 @@ from .common.gwp import get_gwp_values
 
 from .resource_manager.database_manager import DatabaseManager
 
-from .systems.cattle_agriculture import CattleAgriculture
+from .systems.cattle_agriculture import CattleAgriculture, DEFAULT_DEPLOYMENT_YEAR
 from .systems.forestry import Forestry
 from .systems.non_cattle_agriculture import NonCattleAgriculture
 from .systems.organic_soils import OrganicSoils
@@ -53,6 +53,18 @@ class Optigob:
                 f"its time series to the database's first year, so the two must "
                 f"be equal -- set baseline_year={db_baseline_year}, or supply a "
                 f"database whose first year is {self.baseline_year}."
+            )
+
+        # The year a selected cattle abatement/productivity reaches full effect.
+        # Deliberately independent of target_year and of the waypoints: it is a
+        # scenario property, not a user target, so "Frontier" must mean the same
+        # deployment rate no matter where the user puts their checkpoints. See
+        # claude-docs/abatement-deployment-ramp.md.
+        self.deployment_year = json_config.get(DEPLOYMENT_YEAR, DEFAULT_DEPLOYMENT_YEAR)
+        if self.deployment_year <= self.baseline_year:
+            raise ValueError(
+                f"deployment_year must be after baseline_year "
+                f"({self.baseline_year}), got {self.deployment_year!r}"
             )
 
         self.split_gas = json_config.get(SPLIT_GAS, False)
@@ -126,7 +138,8 @@ class Optigob:
             if isinstance(fi, CattleAgriculture):
                 fi.run_cattle_systems(self.baseline_year, self.target_year, self.db_manager, nca,
                                       forestry=forestry, ad_emissions=ad_emissions,
-                                      gwp=self.gwp, split_gas=self.split_gas)
+                                      gwp=self.gwp, split_gas=self.split_gas,
+                                      deployment_year=self.deployment_year)
 
         validate_land_balance(self.fields, self.baseline_year, self.target_year)
         balance_areas(self.fields, self.baseline_year, self.target_year)

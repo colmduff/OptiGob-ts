@@ -2,13 +2,25 @@ def apply_scalers(fields, db_manager, baseline_year):
     """Apply near-term (2020-2025) calibration factors from the bundled
     `scalers` DB table to every system whose name has a matching column.
 
-    Known, currently-inert bug: the first row's scaler (1.0, meant to be
-    a no-op) is a numpy.float64; multiplying a Python float by it
-    produces a numpy.float64, which then fails
-    `AgricultureSystem.update_by_scaler`'s strict `type(x) is float`
-    check on every subsequent row -- so this mechanism currently does
-    nothing for any sector (see claude-docs/livestock-optimisation-gap.md
-    section 2).
+    Known bug, mostly inert: multiplying a Python float by the first row's
+    numpy.float64 scaler produces a numpy.float64, which then fails
+    `AgricultureSystem.update_by_scaler`'s strict `type(x) is float` check on
+    every subsequent row (see claude-docs/cattle-optimisation.md section 2).
+
+    "Mostly", not "entirely" -- the earlier claim that this "does nothing for
+    any sector" is wrong in two ways worth knowing:
+
+    - The **baseline-year row does apply**, and is load-bearing. It is why 2020
+      Dairy is ~4.15M head rather than the reference row's 27,439 (x151.19).
+      Every baseline figure in the model depends on it.
+    - It still calls `update_time_series`, so it **extends each matching
+      system's series to 2025 with flat values** -- shifting the effective
+      waypoint-interpolation anchor from 2020 to 2025 for Pigs/Poultry/Sheep/
+      Crops/Dairy/Beef (but not No-Crops, which has no column).
+
+    What is lost is rows 2021-2025: real observed history (beef -20.5% over
+    those years) that the model discards and replaces with a modelled
+    trajectory. See claude-docs/NOTES.md.
 
     NOTE (investigated, do not "fix" naively): simply switching that check
     to `isinstance(x, float)` activates the loop but exposes a deeper bug --

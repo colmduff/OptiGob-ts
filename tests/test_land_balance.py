@@ -4,15 +4,15 @@ Land-balance constraint coverage.
 Two independent things are tested here (see claude-docs/land-balance.md and
 balancing.py's module docstring for the full design rationale):
 
-1. `cattle_systems` now requires `ratio_type`/`ratio_value` -- the heuristic
-   split was removed since it had no land-balance awareness at all. Once
-   ratio is mandatory, the ratio-optimiser's own per-year `area_commitment`
-   constraint makes the general grassland pool (cattle/sheep vs.
-   afforestation/AD) self-enforcing -- confirmed by reproducing
-   land-balance.md's own worked example (afforestation_rate=5,
-   target_year=2100, cattle frozen until 2030 via scaler=1) and showing it's
-   infeasible under the old heuristic but feasible once ratio is added, with
-   no other numbers changed.
+1. The ratio-optimiser's own per-year `area_commitment` constraint makes the
+   general grassland pool (cattle/sheep vs. afforestation/AD) self-enforcing
+   -- confirmed by reproducing land-balance.md's own worked example
+   (afforestation_rate=5, target_year=2100, cattle frozen until 2030 via
+   scaler=1), which was infeasible under the removed heuristic split but runs
+   clean under the LP. `ratio_value` is optional and defaults to the baseline
+   year's own observed ratio; what matters for land balance is that the LP
+   runs at all (the heuristic had no area constraint), not that the user
+   picked a ratio by hand.
 2. The organic-soil pool ("Organic soil under grass"'s baseline Drained
    area, shared between rewetting and afforestation's organic-soil
    sub-claim) has no such optimiser covering it, so `validate_land_balance`
@@ -43,7 +43,15 @@ def _organic_soil_config(afforestation_rate, rewetting_ratio, target_year=2050):
     }
 
 
-def test_cattle_systems_without_ratio_raises():
+def test_cattle_systems_without_ratio_defaults_to_baseline_ratio():
+    """Omitting ratio_value must reproduce the baseline year's own herd split,
+    not distort it: a config that says nothing about herd composition is not
+    asking for the herd to be restructured.
+
+    Guards the 2021 discontinuity fix -- when ratio_value was mandatory the app
+    defaulted it to 2.0 against a real baseline ratio of ~1.59, which snapped
+    beef down 14.1% in baseline_year+1.
+    """
     # non_cattle_agriculture is required alongside cattle_systems even in
     # isolation -- run_cattle_systems()'s budget math always subtracts
     # non-cattle's contribution, cattle waypoints can't resolve without it
@@ -60,17 +68,29 @@ def test_cattle_systems_without_ratio_raises():
         },
     }
     optigob = Optigob(json_config=config, db_file_path=db_file_path)
-    with pytest.raises(ValueError, match="ratio_type"):
-        optigob.run()
+    optigob.run()  # no ratio configured -> must not raise
+
+    # Assert the *split*, not the level: this config's 2030 waypoint asks for a
+    # 20% cut, so the herd is legitimately already shrinking in 2021. What must
+    # not happen is the dairy:beef composition lurching.
+    cattle = optigob.get_field(CATTLE_AGRICULTURE)
+    dairy = cattle.get_system(CATTLE_AGRICULTURE_DAIRY).time_series[TOTAL_CATTLE_NUMBERS]
+    beef = cattle.get_system(CATTLE_AGRICULTURE_BEEF).time_series[TOTAL_CATTLE_NUMBERS]
+    assert dairy[1] / beef[1] == pytest.approx(dairy[0] / beef[0], rel=1e-6), (
+        "dairy:beef composition jumped in baseline_year+1 with no ratio configured"
+    )
 
 
-def test_grassland_pool_self_enforcing_once_ratio_is_set():
+def test_grassland_pool_self_enforcing_under_ratio_optimiser():
     """Reproduces land-balance.md's own worked example: cattle frozen until
     2030 (scaler=1), afforestation_rate=5 and AD both already claiming land
     by then. Infeasible under the old heuristic (confirmed by history in
-    claude-docs/land-balance.md); feasible once ratio_type/ratio_value are
-    added, with every other number identical -- the LP forces cattle to
+    claude-docs/land-balance.md); feasible under the LP, which forces cattle to
     cede land immediately rather than waiting for its first waypoint.
+
+    Runs both with an explicit ratio and without one (defaulting to the
+    baseline ratio) -- the area_commitment constraint is what makes the pool
+    self-enforcing, and it applies either way.
     """
     config = {
         "baseline_year": 2020, "target_year": 2100,
@@ -94,12 +114,11 @@ def test_grassland_pool_self_enforcing_once_ratio_is_set():
         "ad_emissions": {"implementation_year": 2035, "ccs": True, "additional_biomethane_year": 2040, "additional_grass_biomethane": 2000, "willow_year": 2045, "cdr_bioenergy": 5},
     }
 
-    # No ratio_type/ratio_value -> can't even run (mandatory now).
+    # No ratio configured -> defaults to the baseline ratio, still feasible.
     optigob = Optigob(json_config=config, db_file_path=db_file_path)
-    with pytest.raises(ValueError, match="ratio_type"):
-        optigob.run()
+    optigob.run()  # must not raise
 
-    # Same config, ratio added -> feasible, no other numbers touched.
+    # Same config with an explicit ratio -> also feasible, no other numbers touched.
     import copy
     with_ratio = copy.deepcopy(config)
     for wp in with_ratio["cattle_systems"]["waypoints"]:

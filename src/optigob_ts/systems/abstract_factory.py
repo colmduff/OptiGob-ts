@@ -28,6 +28,13 @@ class System(ABC):
         co2e = transform_to_co2e_time_series(self.time_series[CO2], self.time_series[N2O], self.time_series[CH4], gwp)
         return self.name, co2e
 
+    def get_gas(self, gas, time_span):
+        """One raw, UNCONVERTED gas series (kt of that gas -- no GWP factor is
+        ever applied). The per-system analogue of `get_net_zero`, shaped like
+        `get_co2e` so `Field.get_gas` can stack it per sector.
+        """
+        return self.name, self.time_series[gas][:time_span]
+
     def get_current_year(self, baseline_year):
         current_year = None
         for key, value in self.time_series.items():
@@ -134,6 +141,25 @@ class Field(ABC):
         output_list = []
         for s in self.systems:
             output_list.append(s.get_co2e(gwp))
+
+        total = get_total(output_list, time_span)
+        output_list.append(("total_" + self.name, total))
+
+        return output_list
+
+    def get_gas(self, gas, time_span):
+        """Per-sector breakdown of one raw gas (kt of that gas), mirroring
+        `get_co2e`'s shape and total row.
+
+        Exists so a CH4 target can be attributed to the sectors driving it:
+        `check_net_zero_status`'s split-gas check grades whole-AFOLU CH4, while
+        the cattle waypoints' own `ch4_scaler` only covers cattle + non-cattle
+        agriculture, and the difference (organic soils, AD) is invisible
+        without this. See claude-docs/NOTES.md.
+        """
+        output_list = []
+        for s in self.systems:
+            output_list.append(s.get_gas(gas, time_span))
 
         total = get_total(output_list, time_span)
         output_list.append(("total_" + self.name, total))

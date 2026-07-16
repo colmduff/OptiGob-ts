@@ -92,7 +92,7 @@ By default, `cattle_systems` uses a fixed heuristic to split each waypoint's emi
 }
 ```
 
-`ratio_type` is `"dairy_per_beef"` or `"beef_per_dairy"`, matching `optigob`'s own convention. Requires the `optimise`/`full` extra (`highspy`) installed. Run `tests/example.py` to see a side-by-side comparison of the heuristic vs. optimiser split on the same scenario. See `tests/test_livestock_optimisation.py` for further worked examples, and `claude-docs/livestock-optimisation-gap.md` in the parent monorepo for the design rationale.
+`ratio_type` is `"dairy_per_beef"` or `"beef_per_dairy"`, matching `optigob`'s own convention. Requires the `optimise`/`full` extra (`highspy`) installed. Run `tests/example.py` to see a side-by-side comparison of the heuristic vs. optimiser split on the same scenario. See `tests/test_livestock_optimisation.py` for further worked examples, and `claude-docs/cattle-optimisation.md` in the parent monorepo for the design rationale.
 
 ## License
 

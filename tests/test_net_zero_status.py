@@ -51,7 +51,14 @@ def make_split_gas_config(ch4_scaler=0.8, **overrides):
 
 def test_split_gas_omitted_is_regression_safe():
     """Not setting split_gas at all must behave identically to the existing
-    (pre-split-gas) cattle optimiser path."""
+    (pre-split-gas) cattle optimiser path.
+
+    Values moved once, when the dairy:beef ratio stopped snapping to
+    ratio_value in baseline_year+1 and started ramping there from the baseline
+    year's own observed ratio (claude-docs/abatement-deployment-ramp.md). That
+    is a redistribution between the two herds, not a change to this test's
+    subject: the dairy+beef total is unchanged.
+    """
     config = make_config()
     optigob = Optigob(json_config=config, db_file_path=db_file_path)
     optigob.run()
@@ -60,8 +67,8 @@ def test_split_gas_omitted_is_regression_safe():
     beef = optigob.get_field("cattle_systems").get_system("Beef")
     idx = 2025 - 2020
 
-    assert round(dairy.time_series["co2e"][idx], 2) == round(11149.265587902906, 2)
-    assert round(beef.time_series["co2e"][idx], 2) == round(5216.449612097095, 2)
+    assert round(dairy.time_series["co2e"][idx], 2) == round(10455.492571082397, 2)
+    assert round(beef.time_series["co2e"][idx], 2) == round(5910.222628917603, 2)
 
 
 def test_split_gas_false_matches_omitted():

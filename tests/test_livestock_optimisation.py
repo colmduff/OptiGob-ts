@@ -196,6 +196,15 @@ def test_optimise_infeasible_when_budget_negative():
 # --- once and hard-coded (same convention as the other test_*.py files in
 # --- this suite). Reflect AR5-recomputed co2e (see gwp.py/recompute_co2e),
 # --- not the DB's precomputed co2e column.
+# ---
+# --- The dairy/beef figures moved when the ratio stopped snapping to
+# --- ratio_value in baseline_year+1 and started ramping there from the
+# --- baseline year's own observed ratio (see
+# --- claude-docs/abatement-deployment-ramp.md). The 2025 split is now the
+# --- ratio 5/30 of the way from 1.5865 to 2.0, not a flat 2.0. Verified as a
+# --- pure redistribution: the dairy+beef total is unchanged at 16365.72
+# --- (the emissions budget still binds identically), dairy -693.78 and beef
+# --- +693.78.
 
 def test_cattle_optimiser_end_to_end():
     config = {
@@ -223,8 +232,11 @@ def test_cattle_optimiser_end_to_end():
     beef = optigob.get_field("cattle_systems").get_system("Beef")
     idx = 2025 - 2020
 
-    assert round(dairy.time_series["co2e"][idx], 2) == round(11149.265587902906, 2)
-    assert round(beef.time_series["co2e"][idx], 2) == round(5216.449612097095, 2)
+    assert round(dairy.time_series["co2e"][idx], 2) == round(10455.492571082397, 2)
+    assert round(beef.time_series["co2e"][idx], 2) == round(5910.222628917603, 2)
+
+    # The budget is what binds, so the split moving must not move the total.
+    assert round(dairy.time_series["co2e"][idx] + beef.time_series["co2e"][idx], 2) == round(16365.72, 2)
 
     # Held flat after the last waypoint, same as the heuristic path.
     assert round(dairy.time_series["co2e"][idx], 2) == round(dairy.time_series["co2e"][-1], 2)

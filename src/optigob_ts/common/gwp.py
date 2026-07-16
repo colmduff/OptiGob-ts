@@ -37,9 +37,16 @@ def transform_to_co2e_time_series(co2, n2o, ch4, gwp: GWPValues = DEFAULT_GWP):
 
 def recompute_co2e(kwargs: dict, gwp: GWPValues, co2_key="co2", ch4_key="ch4", n2o_key="n2o", co2e_key="co2e",
                     co2_n2o_co2e_key="co2_n2o_co2e") -> dict:
-    """Overwrite kwargs[co2e_key] with the GWP-recomputed value from its raw gas
-    components, in place -- for DB-sourced dicts that carry a precomputed co2e figure
-    alongside co2/ch4/n2o whose original GWP/AR basis is unknown/unrecoverable.
+    """Set kwargs[co2e_key] to the GWP-recomputed value from its raw gas
+    components, in place.
+
+    NOTE: despite the name, this does not overwrite anything for the tables it is
+    actually called on -- neither `cattle` nor `non_cattle` has a `co2e` metric at
+    all, so `co2e` and `co2_n2o_co2e` are *created* here, not corrected. They are
+    therefore valid `scale_parameter` values without being DB columns (see
+    claude-docs/scalers-and-waypoints.md). Forestry is the sector with a
+    precomputed CO2e of unknown GWP basis, and it does not route through here --
+    it has no gas-level breakdown to recompute from.
 
     Also sets kwargs[co2_n2o_co2e_key] to the same figure with CH4 excluded
     (CO2 + N2O only, named explicitly so it can't be mistaken for the full

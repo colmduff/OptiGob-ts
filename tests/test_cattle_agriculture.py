@@ -8,10 +8,17 @@ import pytest
 # "co2e" drives every waypoint's dairy/beef scaler, this recompute also shifts every other
 # scaled metric (protein, cattle numbers, etc.), not just the printed co2e figure.
 #
-# Also reflects the mandatory ratio-constrained optimiser (ratio_type=dairy_per_beef,
+# Also reflects the ratio-constrained optimiser (ratio_type=dairy_per_beef,
 # ratio_value=2.0 here) -- the heuristic (no-ratio) split was removed since it had no
 # land-balance awareness at all (see claude-docs/consistency-and-moo.md section 2/2a,
 # claude-docs/land-balance.md). Only the baseline (2020) row is unaffected by that change.
+#
+# The 2030/2040 rows moved once more when abatement/productivity/ratio stopped landing
+# in full in baseline_year+1 and started ramping from the baseline row on a fixed
+# 2020->deployment_year (2050) clock -- see claude-docs/abatement-deployment-ramp.md.
+# 2050 is deployment_year, where the ramp completes and the effective row equals the
+# waypoint row, so that year's figures are unchanged; 2020 (baseline) is unchanged too.
+# Only the partially-deployed years in between move.
 db_file_path = os.path.join(os.path.dirname(__file__), "data", "database.db")
 
 config1 = {
@@ -83,8 +90,8 @@ config1 = {
     "test_years, config, test_metric, expected_results",
     [
         ([2020, 2030, 2040, 2050], config1, ["co2e", "human_consumed_protein"], [[(12941.864, 7633.53), (8560998737.33, 286692610.1)],
-                                                                                 [(14564.822964841866, 5889.735361308424), (9634580537.351204, 255932269.4341366)],
-                                                                                 [(9949.704374363824, 4507.971425636175), (8416403749.203429, 195889167.63333154)],
+                                                                                 [(13524.527798473107, 7007.484591614661), (8946428845.621677, 275649239.7357684)],
+                                                                                 [(9688.044403217757, 4769.631396782245), (7553620340.343317, 196951361.84123957)],
                                                                                  [(8857.649925909629, 3702.357627134163), (12713813291.807669, 263306510.3968644)]])
     ],
 )

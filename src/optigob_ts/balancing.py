@@ -79,7 +79,7 @@ def validate_land_balance(fields, baseline_year, target_year):
         )
     logger.info(
         "validate_land_balance: grassland pool (cattle/sheep vs afforestation+AD) not checked here -- "
-        "self-enforcing via the mandatory ratio-LP's area_commitment constraint, if cattle_systems is present"
+        "self-enforcing via the ratio-LP's area_commitment constraint, if cattle_systems is present"
     )
 
 

@@ -51,11 +51,17 @@ rather than reimplemented, and via `net_zero` as a plottable category.
 
 import pandas as pd
 
-from .common.keys import CO2E, AREA, PROTEIN, BIO_ENERGY, HWP, SUBSTITUTION, BIODIVERSITY
+from .common.keys import CO2E, AREA, PROTEIN, BIO_ENERGY, HWP, SUBSTITUTION, BIODIVERSITY, CO2, CH4, N2O
 from .emissions import compute_net_zero
 from .systems.cattle_agriculture import CattleAgriculture
 
 PARAMETERS = (CO2E, AREA, PROTEIN, BIO_ENERGY, HWP, SUBSTITUTION, BIODIVERSITY)
+
+# Raw single-gas parameters, reported per sector in kt of the gas itself with
+# no GWP factor applied -- NOT interchangeable with CO2E. Handled separately
+# from PARAMETERS because they all route through the one `Field.get_gas(gas,
+# time_span)` method rather than a `get_<parameter>` of their own.
+GAS_PARAMETERS = (CO2, CH4, N2O)
 
 # One fixed unit per parameter (documented convention, not a per-row DB
 # lookup -- AD's DB queries never select any "<metric>_unit" column at all,
@@ -71,6 +77,9 @@ PARAMETER_UNITS = {
     SUBSTITUTION: "kt CO2e",
     BIODIVERSITY: "ha",
     "livestock_population": "head",
+    CO2: "kt CO2",
+    CH4: "kt CH4",
+    N2O: "kt N2O",
 }
 
 TIDY_COLUMNS = ["field", "parameter", "label", "is_total", "year", "value", "unit"]
@@ -107,6 +116,9 @@ CATEGORY_PARAMETERS = {
     "substitution": SUBSTITUTION,
     "biodiversity": BIODIVERSITY,
     "livestock_population": "livestock_population",
+    "co2": CO2,
+    "ch4": CH4,
+    "n2o": N2O,
 }
 
 
@@ -155,6 +167,10 @@ class Results:
                 else:
                     result = method(self.time_span)
                 rows.extend(self._rows_from_result(field.name, parameter, result))
+
+            for gas in GAS_PARAMETERS:
+                result = field.get_gas(gas, self.time_span)
+                rows.extend(self._rows_from_result(field.name, gas, result))
 
             # Livestock headcount isn't one of the 7 standard parameters --
             # cattle is the only field that tracks a headcount at all.
@@ -239,6 +255,29 @@ class Results:
     @property
     def livestock_population(self):
         return self.wide(CATEGORY_PARAMETERS["livestock_population"], include_totals=True)
+
+    @property
+    def co2(self):
+        """Per-sector CO2 in kt CO2 -- raw, no GWP applied. Forestry's column
+        carries its precomputed CO2e figure (that field has no gas-level
+        breakdown at all; see `systems/forestry.py`), so this is not a pure
+        CO2 series for that one sector.
+        """
+        return self.wide(CATEGORY_PARAMETERS["co2"], include_totals=True)
+
+    @property
+    def ch4(self):
+        """Per-sector CH4 in kt CH4 -- raw, UNCONVERTED. Not CO2e: do not sum
+        alongside `ghg`. Sums (over non-total columns) to `compute_net_zero`'s
+        `total_ch4`, which is what `check_net_zero_status`'s split-gas target
+        grades.
+        """
+        return self.wide(CATEGORY_PARAMETERS["ch4"], include_totals=True)
+
+    @property
+    def n2o(self):
+        """Per-sector N2O in kt N2O -- raw, no GWP applied."""
+        return self.wide(CATEGORY_PARAMETERS["n2o"], include_totals=True)
 
     def plot(self, category, ax=None, include_totals=False, dynamic_only=False, split_by_magnitude=False,
              columns=None):
