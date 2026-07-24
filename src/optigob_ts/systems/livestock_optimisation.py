@@ -1,5 +1,3 @@
-from pyomo.environ import ConcreteModel, Var, Constraint, Objective, NonNegativeReals, maximize, SolverFactory
-
 from ..common.logger import get_logger
 
 logger = get_logger("livestock_optimisation")
@@ -23,9 +21,26 @@ class LivestockOptimisation:
     and an emissions budget -- the OptiGob-ts analogue of OptiGob's
     livestock/livestock_optimisation.py, adapted to OptiGob-ts's reference-row
     data shape instead of OptiGob's per-unit scaler tables.
+
+    The LP is solved by calling HiGHS **in-process via highspy directly**, not
+    through Pyomo's ``SolverFactory``. This is deliberate: both Pyomo solver
+    interfaces for HiGHS wrap every solve in ``capture_output(capture_fd=True)``
+    (executable *and* APPSI), which redirects the process-global stdout/stderr
+    file descriptors and spawns a ``_mergedReader`` thread to drain them on every
+    solve. run_cattle_systems() re-solves once per simulation year, so a single
+    run spawned dozens of those reader threads; under the dashboard's repeated
+    reruns (Streamlit runs the script in a worker thread and re-executes it on
+    every widget interaction) the fd-level capture raced across threads and one
+    ``_mergedReader`` eventually crashed, wedging the app. Calling highspy
+    directly with ``output_flag=False`` avoids the tee entirely -- no subprocess,
+    no fd capture, no reader thread -- and is markedly faster (no per-solve
+    model-file write / process spawn).
     """
 
     def __init__(self, solver_name="highs"):
+        # Retained for backward compatibility (and the SIP ``solver_name`` field);
+        # no longer used to select a Pyomo solver plugin -- the optimiser now calls
+        # HiGHS directly via highspy in optimise().
         self.solver_name = solver_name or "highs"
 
     def scalar(self, x):
@@ -71,50 +86,52 @@ class LivestockOptimisation:
             dairy_area, beef_area, scale_parameter, dairy_metric, scale_parameter, beef_metric,
         )
 
-        model = ConcreteModel()
-        model.x = Var(domain=NonNegativeReals)  # beef_scaler
-        model.y = Var(domain=NonNegativeReals)  # dairy_scaler
-
-        model.area_constraint = Constraint(
-            expr=(model.x * beef_area + model.y * dairy_area) <= area_commitment
-        )
-
-        if ratio_type == "dairy_per_beef":
-            model.ratio_constraint = Constraint(expr=model.y == ratio_value * model.x)
-        elif ratio_type == "beef_per_dairy":
-            model.ratio_constraint = Constraint(expr=model.x == ratio_value * model.y)
-        else:
+        if ratio_type not in ("dairy_per_beef", "beef_per_dairy"):
             raise ValueError(f"Invalid ratio_type: {ratio_type}. Must be 'dairy_per_beef' or 'beef_per_dairy'.")
 
-        model.emissions_constraint = Constraint(
-            expr=(model.x * beef_metric + model.y * dairy_metric) <= emissions_budget
-        )
+        try:
+            import highspy
+        except ImportError as e:  # pragma: no cover - environment guard
+            raise ImportError(
+                "highspy is required for livestock optimisation. Install the 'optimise' "
+                "or 'full' extra (e.g. `poetry install -E full`)."
+            ) from e
+
+        h = highspy.Highs()
+        # Silence the solver: no console output means Pyomo-style output capture
+        # (TeeStream / _mergedReader / fd redirection) is never needed. Keeps the
+        # solve fully in-process and thread-safe under the dashboard's reruns.
+        h.setOptionValue("output_flag", False)
+
+        beef = h.addVariable(lb=0)   # beef_scaler  (was model.x)
+        dairy = h.addVariable(lb=0)  # dairy_scaler (was model.y)
+
+        h.addConstr(beef * beef_area + dairy * dairy_area <= area_commitment)
+
+        if ratio_type == "dairy_per_beef":
+            h.addConstr(dairy == ratio_value * beef)
+        else:  # beef_per_dairy (validated above)
+            h.addConstr(beef == ratio_value * dairy)
+
+        h.addConstr(beef * beef_metric + dairy * dairy_metric <= emissions_budget)
 
         if ch4_budget is not None:
             dairy_ch4 = self.scalar(dairy_waypoint_data["ch4"])
             beef_ch4 = self.scalar(beef_waypoint_data["ch4"])
-            model.ch4_constraint = Constraint(
-                expr=(model.x * beef_ch4 + model.y * dairy_ch4) <= ch4_budget
-            )
+            h.addConstr(beef * beef_ch4 + dairy * dairy_ch4 <= ch4_budget)
 
-        model.obj = Objective(expr=model.x + model.y, sense=maximize)
+        h.maximize(beef + dairy)
 
-        solver = SolverFactory(self.solver_name)
-        # load_solutions=False: some solver backends raise instead of
-        # returning gracefully when the model is infeasible if solutions are
-        # loaded eagerly. Inspect termination_condition first, and only load
-        # variable values once we know a solution actually exists.
-        result = solver.solve(model, load_solutions=False)
-        termination = str(result.solver.termination_condition).lower()
-
-        if "infeasible" in termination:
+        status = h.getModelStatus()
+        if status != highspy.HighsModelStatus.kOptimal:
             error_msg = (
                 "Livestock optimisation infeasible: no feasible dairy/beef split exists for this "
                 "waypoint's ratio, area, and emissions budget combination.\n"
                 f"emissions_budget={emissions_budget}, area_commitment={area_commitment}, "
-                f"ratio_type={ratio_type}, ratio_value={ratio_value}, ch4_budget={ch4_budget}."
+                f"ratio_type={ratio_type}, ratio_value={ratio_value}, ch4_budget={ch4_budget}, "
+                f"model_status={h.modelStatusToString(status)}."
             )
-            logger.warning("optimise: INFEASIBLE (termination_condition=%s)", termination)
+            logger.warning("optimise: INFEASIBLE (model_status=%s)", h.modelStatusToString(status))
             return OptimisationResult({
                 "status": "infeasible",
                 "message": error_msg,
@@ -122,14 +139,13 @@ class LivestockOptimisation:
                 "beef_scaler": 0.0,
             })
 
-        model.solutions.load_from(result)
-        beef_scaler = model.x.value
-        dairy_scaler = model.y.value
+        beef_scaler = h.variableValue(beef)
+        dairy_scaler = h.variableValue(dairy)
 
         if beef_scaler is None or dairy_scaler is None:
             error_msg = (
                 "Livestock optimisation did not return a usable solution "
-                f"(termination_condition={termination})."
+                f"(model_status={h.modelStatusToString(status)})."
             )
             return OptimisationResult({
                 "status": "infeasible",
