@@ -3,6 +3,10 @@ from optigob_ts.optigob import Optigob
 from optigob_ts.common.keys import *
 import pytest
 
+# `total_yield` is the cattle table's raw product mass in kg (milk + beef carcass), formerly
+# mislabelled `human_consumed_protein` in tonnes. It is NOT protein -- see
+# cattle_agriculture.py/get_protein and tests/test_protein.py for the protein figures.
+#
 # Expected co2e/protein values below reflect AR5-recomputed co2e (co2 + ch4*28 + n2o*265),
 # not the DB's precomputed co2e column -- see gwp.py/recompute_co2e. Because scale_parameter
 # "co2e" drives every waypoint's dairy/beef scaler, this recompute also shifts every other
@@ -89,7 +93,7 @@ config1 = {
 @pytest.mark.parametrize(
     "test_years, config, test_metric, expected_results",
     [
-        ([2020, 2030, 2040, 2050], config1, ["co2e", "human_consumed_protein"], [[(12941.864, 7633.53), (8560998737.33, 286692610.1)],
+        ([2020, 2030, 2040, 2050], config1, ["co2e", "total_yield"], [[(12941.864, 7633.53), (8560998737.33, 286692610.1)],
                                                                                  [(13524.527798473107, 7007.484591614661), (8946428845.621677, 275649239.7357684)],
                                                                                  [(9688.044403217757, 4769.631396782245), (7553620340.343317, 196951361.84123957)],
                                                                                  [(8857.649925909629, 3702.357627134163), (12713813291.807669, 263306510.3968644)]])

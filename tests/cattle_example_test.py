@@ -8,6 +8,11 @@ a cattle scenario actually plays out year by year. Run it with:
 
     poetry run python tests/cattle_example_test.py
 
+The yields printed per year are the DB's raw product mass in kg (`milk_yield`,
+`beef_carcass_yield`) -- what the LP actually scales. They are NOT protein;
+`Results.protein` converts them via the `protein_content` factors (milk 0.035,
+beef 0.23) and kg -> t. See cattle_agriculture.py/get_protein.
+
 --------------------------------------------------------------------------
 THE SCENARIO (tests/data/cattle/input/cattle_example.json, a copy of
 examples/cattle_example.json)
@@ -115,8 +120,8 @@ whole scenario is measured against.
     print(f"  Dairy cattle numbers:  {dairy.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  Beef cattle numbers:   {beef.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  Baseline dairy:beef ratio (by numbers): {dairy.time_series['total_cattle_numbers'][i] / beef.time_series['total_cattle_numbers'][i]:.2f} : 1")
-    print(f"  Dairy protein (milk):  {dairy.time_series['protein_milk'][i]:>18,.0f}")
-    print(f"  Beef protein (beef):   {beef.time_series['protein_beef'][i]:>18,.0f}")
+    print(f"  Dairy milk yield:      {dairy.time_series['milk_yield'][i]:>18,.0f} kg")
+    print(f"  Beef carcass yield:    {beef.time_series['beef_carcass_yield'][i]:>18,.0f} kg")
 
     print("""
 2030: FIRST WAYPOINT -- scaler=0.8, ratio_type=dairy_per_beef, ratio_value=5.0
@@ -135,8 +140,8 @@ to shrink sharply to make room for that 5:1 skew.
     print(f"  Dairy cattle numbers:  {dairy.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  Beef cattle numbers:   {beef.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  Realized dairy:beef ratio (by numbers): {dairy.time_series['total_cattle_numbers'][i] / beef.time_series['total_cattle_numbers'][i]:.2f} : 1   (target was 5.00 : 1 -- close but not exact, see note 1 above)")
-    print(f"  Dairy protein (milk):  {dairy.time_series['protein_milk'][i]:>18,.0f}")
-    print(f"  Beef protein (beef):   {beef.time_series['protein_beef'][i]:>18,.0f}")
+    print(f"  Dairy milk yield:      {dairy.time_series['milk_yield'][i]:>18,.0f} kg")
+    print(f"  Beef carcass yield:    {beef.time_series['beef_carcass_yield'][i]:>18,.0f} kg")
     print(f"  Spared area so far:    {spared.time_series['area'][i]:>14,.1f} ha")
 
     print("""
@@ -153,8 +158,8 @@ back through parity like a naive interpolation would suggest.
     print(f"  Dairy cattle numbers:  {dairy.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  Beef cattle numbers:   {beef.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  dairy:beef ratio (by numbers): {dairy.time_series['total_cattle_numbers'][i] / beef.time_series['total_cattle_numbers'][i]:.2f} : 1   (independently solved, not interpolated -- see note 2 above)")
-    print(f"  Dairy protein (milk):  {dairy.time_series['protein_milk'][i]:>18,.0f}")
-    print(f"  Beef protein (beef):   {beef.time_series['protein_beef'][i]:>18,.0f}")
+    print(f"  Dairy milk yield:      {dairy.time_series['milk_yield'][i]:>18,.0f} kg")
+    print(f"  Beef carcass yield:    {beef.time_series['beef_carcass_yield'][i]:>18,.0f} kg")
 
     print("""
 2050: SECOND WAYPOINT -- scaler=0.6, ratio_type=beef_per_dairy, ratio_value=5.0
@@ -171,8 +176,8 @@ ratio has flipped: beef must now be 5.0 x dairy exactly.
     print(f"  Dairy cattle numbers:  {dairy.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  Beef cattle numbers:   {beef.time_series['total_cattle_numbers'][i]:>14,.0f} head")
     print(f"  Realized beef:dairy ratio (by numbers): {beef.time_series['total_cattle_numbers'][i] / dairy.time_series['total_cattle_numbers'][i]:.2f} : 1   (target was 5.00 : 1)")
-    print(f"  Dairy protein (milk):  {dairy.time_series['protein_milk'][i]:>18,.0f}")
-    print(f"  Beef protein (beef):   {beef.time_series['protein_beef'][i]:>18,.0f}")
+    print(f"  Dairy milk yield:      {dairy.time_series['milk_yield'][i]:>18,.0f} kg")
+    print(f"  Beef carcass yield:    {beef.time_series['beef_carcass_yield'][i]:>18,.0f} kg")
     print(f"  Spared area so far:    {spared.time_series['area'][i]:>14,.1f} ha")
 
     print("""

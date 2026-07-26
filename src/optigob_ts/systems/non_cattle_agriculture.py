@@ -86,6 +86,17 @@ class NonCattleAgriculture(Field):
             self.get_system(NON_CATTLE_AGRICULTURE_NO_CROPS).time_series[AREA] = no_crop
 
     def get_protein(self, time_span):
+        """Protein output in tonnes.
+
+        Unlike cattle, the `non_cattle` table's `protein` metric is ALREADY
+        protein in tonnes, not raw product mass, so no `protein_content`
+        factor applies here -- applying one would understate these sectors
+        four-fold. (Crops carries a separate `human_consumed_protein` that
+        differs from `protein`, 176,358.5 t vs 271,320.8 t; that split only
+        makes sense for a protein figure.) See
+        `cattle_agriculture.py::get_protein` for the sectors that do need
+        converting.
+        """
         output_list = []
         for s in self.systems:
             output_list.append((s.name + "_protein", s.time_series["protein"]))

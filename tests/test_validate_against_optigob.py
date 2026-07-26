@@ -86,7 +86,13 @@ def _run_baseline(config):
     optigob = Optigob(json_config=config, db_file_path=None)
     optigob.run()
     results = optigob.get_results()
-    return results.area.loc[optigob.baseline_year], results.ghg.loc[optigob.baseline_year]
+    year = optigob.baseline_year
+    # A forestry-only config produces no protein rows at all (no field but
+    # cattle/non-cattle agriculture implements get_protein), so the frame is
+    # empty and has no baseline-year index to select.
+    protein = results.protein
+    protein = protein.loc[year] if year in protein.index else None
+    return results.area.loc[year], results.ghg.loc[year], protein
 
 
 def _build_comparisons():
@@ -95,8 +101,8 @@ def _build_comparisons():
     per-sector assertions and the artifact (CSV/xlsx/figure) generation, so
     the numbers behind the report and the numbers behind the assertions can't
     drift apart."""
-    ts_area, ts_ghg = _run_baseline(json.loads(OPTIGOB_TS_CONFIG_PATH.read_text()))
-    ts_forest_area, ts_forest_ghg = _run_baseline(FORESTRY_ONLY_CONFIG)
+    ts_area, ts_ghg, ts_protein = _run_baseline(json.loads(OPTIGOB_TS_CONFIG_PATH.read_text()))
+    ts_forest_area, ts_forest_ghg, _ = _run_baseline(FORESTRY_ONLY_CONFIG)
 
     dm = OptiGobDataManager(json.loads(OPTIGOB_SIP_PATH.read_text()))
     lv = BaselineLivestock(dm)
@@ -139,6 +145,30 @@ def _build_comparisons():
         {"sector": "Organic soil + wetland", "category": "ghg", "unit": "kt CO2e",
          "ts": sum(ts_ghg[label] for label in ORGANIC_SOILS_GHG_LABELS),
          "og": ol.get_wetland_restoration_emission_co2e()},
+        # Protein. OptiGob reports kg, OptiGob-ts tonnes, hence the /1000.
+        #
+        # Both sides read the same underlying yields and apply the same
+        # `protein_content` factors, so cattle agrees to the digit -- which is
+        # the point of comparing it. Cattle protein was previously ~28,600x
+        # (milk) / ~5,000x (beef) too large here because the content
+        # conversion was missing entirely, and this test did not catch it
+        # because protein was not among the compared categories.
+        #
+        # Non-cattle protein is deliberately NOT compared: the two packages
+        # disagree by ~35-52% (sheep 6,892 t vs 14,332 t; pigs+poultry
+        # 86,082 t vs 132,000 t) because their non-cattle figures come from
+        # different source sheets. Both are protein-scale, so this is a data
+        # provenance question for the modelling team, not a units bug -- but
+        # it exceeds REL_TOL and must not be papered over by widening it.
+        {"sector": "Cattle", "category": "protein", "unit": "t",
+         "ts": ts_protein["total_cattle_systems"],
+         "og": (lv.get_total_milk_protein() + lv.get_total_beef_protein()) / 1000.0},
+        {"sector": "Milk", "category": "protein", "unit": "t",
+         "ts": ts_protein["Dairy_milk_protein"],
+         "og": lv.get_total_milk_protein() / 1000.0},
+        {"sector": "Beef (dairy + suckler)", "category": "protein", "unit": "t",
+         "ts": ts_protein["Dairy_beef_protein"] + ts_protein["Beef_beef_protein"],
+         "og": lv.get_total_beef_protein() / 1000.0},
     ]
     for row in rows:
         row["rel_diff"] = abs(row["ts"] - row["og"]) / abs(row["og"]) if row["og"] else 0.0
@@ -158,6 +188,7 @@ def comparison_data():
     ("Organic soil under grass", "area"),
     ("Wetland (peat + natural)", "area"),
     ("Organic soil + wetland", "ghg"),
+    ("Cattle", "protein"), ("Milk", "protein"), ("Beef (dairy + suckler)", "protein"),
 ])
 def test_sector_within_tolerance(comparison_data, sector, category):
     row = next(r for r in comparison_data["rows"] if r["sector"] == sector and r["category"] == category)
@@ -191,6 +222,24 @@ def test_total_agricultural_area_matches_national_scale(comparison_data):
     )
 
 
+@pytest.mark.parametrize("sector", ["Cattle", "Milk", "Beef (dairy + suckler)"])
+def test_cattle_protein_matches_optigob_exactly(comparison_data, sector):
+    """Cattle protein is not merely within tolerance -- it agrees to ~8 s.f.
+
+    Both packages multiply the same raw yields by the same `protein_content`
+    factors, so the only residual is float accumulation order (~1e-8 relative;
+    the two sum over systems differently). Any divergence above that means one
+    of them has changed a factor, a yield, or the herd calibration. Held five
+    orders of magnitude tighter than REL_TOL for that reason: the generous band
+    exists for genuinely differing assumptions, and there are none here.
+    """
+    row = next(r for r in comparison_data["rows"]
+               if r["sector"] == sector and r["category"] == "protein")
+    assert row["ts"] == pytest.approx(row["og"], rel=1e-6), (
+        f"{sector} protein: optigob-ts={row['ts']:,.3f} t vs optigob={row['og']:,.3f} t"
+    )
+
+
 def test_generate_validation_artifacts(comparison_data):
     """Write the comparison table (CSV + xlsx) and the two comparison bar
     charts into tests/data/validation/output/. This is the source of the
@@ -208,7 +257,7 @@ def test_generate_validation_artifacts(comparison_data):
     try:
         with pd.ExcelWriter(OUTPUT_DIR / "comparison.xlsx", engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="all", index=False)
-            for cat in ("area", "ghg"):
+            for cat in ("area", "ghg", "protein"):
                 df[df["category"] == cat].to_excel(writer, sheet_name=cat, index=False)
     except ModuleNotFoundError:
         pass  # openpyxl is an optional extra; CSV + figures still written
@@ -217,10 +266,13 @@ def test_generate_validation_artifacts(comparison_data):
                    FIGURES_DIR / "area_comparison.png")
     _plot_category(df, "ghg", "Baseline GHG: OptiGob-ts vs OptiGob (kt CO2e)",
                    FIGURES_DIR / "ghg_comparison.png")
+    _plot_category(df, "protein", "Baseline cattle protein: OptiGob-ts vs OptiGob (t)",
+                   FIGURES_DIR / "protein_comparison.png")
 
     assert (OUTPUT_DIR / "comparison.csv").exists()
     assert (FIGURES_DIR / "area_comparison.png").exists()
     assert (FIGURES_DIR / "ghg_comparison.png").exists()
+    assert (FIGURES_DIR / "protein_comparison.png").exists()
 
 
 def _plot_category(df, category, title, out_path):

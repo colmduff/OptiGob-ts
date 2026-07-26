@@ -15,7 +15,7 @@ class DatabaseManager:
         """
         if database_path is None:
             self.database_path = os.path.abspath(
-                os.path.join(get_local_dir(), "optigob_ts_default_0.1.0.db")
+                os.path.join(get_local_dir(), "optigob_ts_default_0.1.1.db")
             )
         else:
             self.database_path = os.path.abspath(database_path)
@@ -181,6 +181,32 @@ class DatabaseManager:
         query = "SELECT * FROM scalers"
         df = pd.read_sql_query(query, self.conn)
         return df
+
+    def get_protein_content_scaler(self, type):
+        """Protein content of one product, as a fraction of its raw mass.
+
+        Mirrors OptiGob's `protein_content` table and accessor
+        (`optigob/resource_manager/optigob_data_manager.py::get_protein_content_scaler`).
+        The cattle table stores raw product mass -- `milk_yield` and
+        `beef_carcass_yield`, both in kg -- so this is what turns a yield into
+        protein. Valid types: beef, milk, sheep, pig, poultry, crops.
+
+        Only `milk` and `beef` are consumed by this package; the non-cattle
+        sectors' `protein` metric is already protein, not raw mass (see
+        `systems/non_cattle_agriculture.py::get_protein`). The remaining rows
+        are carried for parity with OptiGob so the two packages' assumptions
+        can be compared.
+
+        Raises:
+            ValueError: if `type` has no row in the table.
+        """
+        query = "SELECT conversion FROM protein_content WHERE type = ?"
+        df = pd.read_sql_query(query, self.conn, params=(type,))
+        if df.empty:
+            raise ValueError(
+                f"No protein content scaler found for type={type!r}"
+            )
+        return float(df["conversion"].iloc[0])
 
     def get_organic_soils(self, name="Organic soil under grass", drainage_status="Drained"):
         query = """

@@ -46,8 +46,16 @@ NON_CATTLE_AGRICULTURE_NO_CROPS = "No-Crops"
 CATTLE_AGRICULTURE = "cattle_systems"
 CATTLE_AGRICULTURE_BEEF = "Beef"
 CATTLE_AGRICULTURE_DAIRY = "Dairy"
-CATTLE_AGRICULTURE_PROTEIN_MILK = "protein_milk"
-CATTLE_AGRICULTURE_PROTEIN_BEEF = "protein_beef"
+# Raw product mass as stored in the `cattle` table, both in kg -- NOT protein.
+# `get_protein` converts them via the `protein_content` table.
+CATTLE_AGRICULTURE_MILK_YIELD = "milk_yield"
+CATTLE_AGRICULTURE_BEEF_YIELD = "beef_carcass_yield"
+# Derived output labels, in tonnes of protein.
+CATTLE_AGRICULTURE_MILK_PROTEIN = "milk_protein"
+CATTLE_AGRICULTURE_BEEF_PROTEIN = "beef_protein"
+# Keys into the `protein_content` table.
+PROTEIN_CONTENT_MILK = "milk"
+PROTEIN_CONTENT_BEEF = "beef"
 CATTLE_AGRICULTURE_SPARED_AREA = "Spared Cattle/Sheep area"
 DAIRY_AREA = "area_dairy"
 BEEF_AREA = "area_beef"
