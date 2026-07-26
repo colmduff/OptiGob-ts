@@ -66,8 +66,14 @@ GAS_PARAMETERS = (CO2, CH4, N2O)
 # One fixed unit per parameter (documented convention, not a per-row DB
 # lookup -- AD's DB queries never select any "<metric>_unit" column at all,
 # and reversing each field's ad-hoc label strings back to a DB metric key
-# to look up its unit would be fragile). Sourced from
-# claude-docs/database-reference.md.
+# to look up its unit would be fragile).
+#
+# PROTEIN is tonnes of protein for every sector. Cattle reach it by conversion:
+# the DB stores their raw product mass in kg (`milk_yield`,
+# `beef_carcass_yield`) and `cattle_agriculture.py::get_protein` applies the
+# `protein_content` factors and kg -> t. Non-cattle values are already tonnes
+# of protein in the DB. So the cattle and non-cattle totals are comparable and
+# summable -- they were not before that conversion existed.
 PARAMETER_UNITS = {
     CO2E: "kt CO2e",
     AREA: "ha",

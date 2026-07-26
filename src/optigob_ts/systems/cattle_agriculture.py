@@ -84,6 +84,23 @@ class CattleAgriculture(Field):
 
         self.systems = [dairy, beef, spared_area]
 
+        # Protein content of milk and beef, as a fraction of raw product mass.
+        # Populated by load_data; declared here so get_protein fails loudly
+        # rather than silently reporting raw yields if it is ever called first.
+        self._milk_protein = None
+        self._beef_protein = None
+
+    def load_data(self, db_manager, gwp=DEFAULT_GWP):
+        """Load each system's baseline row, then cache the protein content factors.
+
+        `get_protein` takes only a `time_span` -- no `Field.get_*` method
+        receives a `db_manager` -- so the two factors are fetched once here
+        instead of per-year at report time.
+        """
+        super().load_data(db_manager, gwp)
+        self._milk_protein = db_manager.get_protein_content_scaler(PROTEIN_CONTENT_MILK)
+        self._beef_protein = db_manager.get_protein_content_scaler(PROTEIN_CONTENT_BEEF)
+
     def _sum_nca(self, nca, key):
         """Sum a given time_series key across every NCA system -- the same
         summation run_cattle_systems() already does inline for the co2e/
@@ -392,15 +409,49 @@ class CattleAgriculture(Field):
         return output_list
 
     def get_protein(self, time_span):
+        """Protein output in tonnes, split by product.
+
+        The `cattle` table stores raw product mass in kg -- `milk_yield` and
+        `beef_carcass_yield` -- not protein. Protein is that mass times its
+        content fraction from the `protein_content` table (milk 0.035, beef
+        0.23), then kg -> t. This mirrors OptiGob, which applies the same two
+        factors in `livestock/livestock_budget.py::get_total_milk_protein` /
+        `get_total_beef_protein`.
+
+        Skipping the conversion -- as this method used to -- reported milk
+        volume and carcass weight as though they were tonnes of protein,
+        ~28,600x and ~5,000x too large respectively, and not comparable with
+        the non-cattle sectors, which are already tonnes of protein.
+
+        Milk and beef are kept as separate series because a dairy system
+        produces both: `Dairy_beef_protein` is dairy-origin (dairy-beef) meat,
+        distinct from `Beef_beef_protein` (suckler).
+        """
         output_list = []
         for s in self.systems:
-            output_list.append((s.name + "_protein_milk", s.time_series["protein_milk"]))
-            output_list.append((s.name + "_protein_beef", s.time_series["protein_beef"]))
+            output_list.append((
+                s.name + "_" + CATTLE_AGRICULTURE_MILK_PROTEIN,
+                self._to_protein(s.time_series[CATTLE_AGRICULTURE_MILK_YIELD],
+                                 self._milk_protein)))
+            output_list.append((
+                s.name + "_" + CATTLE_AGRICULTURE_BEEF_PROTEIN,
+                self._to_protein(s.time_series[CATTLE_AGRICULTURE_BEEF_YIELD],
+                                 self._beef_protein)))
 
         total = get_total(output_list, time_span)
         output_list.append(("total_" + self.name, total))
 
         return output_list
+
+    @staticmethod
+    def _to_protein(yield_series, content):
+        """kg of raw product -> tonnes of protein."""
+        if content is None:
+            raise ValueError(
+                "protein content factors unavailable -- load_data() must run "
+                "before get_protein()"
+            )
+        return [value * content / 1000.0 for value in yield_series]
 
     def get_livestock_population(self, time_span):
         """Head count by system (Dairy, Beef, Spared Cattle/Sheep area --

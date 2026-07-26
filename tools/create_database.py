@@ -163,7 +163,10 @@ def read_animals(excel_path, sqlite_db_path):
 
     xls_sheets = pd.ExcelFile(excel_path).sheet_names
     for sheet in xls_sheets:
-        if sheet == "scalers":
+        # These sheets are already tabular (one header row, one row per record),
+        # so they go straight to SQL. The rest are the wide metric-by-scenario
+        # layout that `create_animals_table` has to unpivot.
+        if sheet in ("scalers", "protein_content"):
             data = pd.read_excel(excel_path, sheet_name=sheet)
             df = pd.DataFrame(data=data)
             df.to_sql(sheet, conn, if_exists='replace', index=False)
@@ -183,7 +186,7 @@ if __name__ == "__main__":
     DEFAULT_STATIC_XLSX = os.path.join(HERE, "data_sources", "static_systems.xlsx")
     DEFAULT_DYNAMIC_XLSX = os.path.join(HERE, "data_sources", "dynamic_systems.xlsx")
     DEFAULT_DB = os.path.join(
-        HERE, "..", "src", "optigob_ts", "database", "optigob_ts_default_0.1.0.db"
+        HERE, "..", "src", "optigob_ts", "database", "optigob_ts_default_0.1.1.db"
     )
 
     parser = argparse.ArgumentParser(description="Rebuild the optigob_ts bundled SQLite database from source spreadsheets.")
